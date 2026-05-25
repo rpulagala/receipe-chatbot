@@ -45,7 +45,15 @@ if prompt := st.chat_input("Tell me what ingredients you have…"):
         st.markdown(prompt)
 
     with st.chat_message("assistant", avatar="🌿"):
-        api_key = os.getenv("ANTHROPIC_API_KEY") or st.secrets.get("ANTHROPIC_API_KEY")
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            try:
+                api_key = st.secrets["ANTHROPIC_API_KEY"]
+            except (KeyError, FileNotFoundError):
+                pass
+        if not api_key:
+            st.error("ANTHROPIC_API_KEY is not configured. Add it in Streamlit Cloud → App settings → Secrets.")
+            st.stop()
         client = anthropic.Anthropic(api_key=api_key)
 
         with st.spinner(""):
