@@ -1,7 +1,6 @@
 import os
 import re
 import json
-import socket
 from pathlib import Path
 
 import streamlit as st
@@ -90,22 +89,17 @@ def save_history(ip: str, history: list):
 
 # ── Session helpers ───────────────────────────────────────────────────────────
 
-def get_session_identity():
-    """Return (computer_name, ip). No login required."""
+def get_client_ip() -> str:
+    """Return the visitor's IP address. No login required."""
     try:
         ip = (
             st.context.headers.get("X-Forwarded-For")
             or st.context.headers.get("X-Real-Ip")
             or "local"
         )
-        ip = ip.split(",")[0].strip()
+        return ip.split(",")[0].strip()
     except Exception:
-        ip = "local"
-    try:
-        computer = socket.gethostname()
-    except Exception:
-        computer = ip
-    return computer, ip
+        return "local"
 
 
 def is_full_recipe(text: str) -> bool:
@@ -136,52 +130,49 @@ section[data-testid="stSidebar"] { min-width: 280px; max-width: 320px; }
 # ── Session state (runs once per browser session) ─────────────────────────────
 
 if "messages" not in st.session_state:
-    computer, ip = get_session_identity()
-    st.session_state.computer = computer
+    ip = get_client_ip()
     st.session_state.ip       = ip
     st.session_state.messages = []
-    st.session_state.recipes  = load_history(ip)   # load from DB on first visit
+    st.session_state.recipes  = load_history(ip)
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 
 with st.sidebar:
-    st.markdown("### 💻 Your Session")
-    st.markdown(f"**Computer:** `{st.session_state.computer}`")
-    st.markdown(f"**IP address:** `{st.session_state.ip}`")
-    st.divider()
+    # ── Top 50% — session info + API key ─────────────────────────────────────
+    st.markdown("##### 🌐 Session")
+    st.caption(f"IP: `{st.session_state.ip}`")
 
-    st.markdown("### 🔑 API Key")
+    st.markdown("##### 🔑 API Key")
     api_key = os.getenv("ANTHROPIC_API_KEY", "")
     if not api_key:
         api_key = st.text_input(
             "Anthropic API key",
             type="password",
             placeholder="sk-ant-...",
+            label_visibility="collapsed",
             help="Held in memory only — never stored.",
         )
     else:
         st.success("Key loaded from environment.", icon="✅")
+
     st.divider()
 
-    st.markdown(f"### 📋 Recipe History *(last {MAX_RECIPES})*")
-    if st.session_state.recipes:
-        for i, recipe in enumerate(reversed(st.session_state.recipes)):
-            with st.expander(recipe["name"]):
-                st.markdown(recipe["content"])
-                if st.button("Remove", key=f"del_{i}"):
-                    st.session_state.recipes = [
-                        r for r in st.session_state.recipes
-                        if r["name"] != recipe["name"]
-                    ]
-                    save_history(st.session_state.ip, st.session_state.recipes)
-                    st.rerun()
-    else:
-        st.caption("Full recipes will be saved here automatically.")
-    st.divider()
-
-    if st.button("Clear chat"):
-        st.session_state.messages = []
-        st.rerun()
+    # ── Bottom 50% — recipe history (scrollable) ──────────────────────────────
+    st.markdown(f"##### 📋 Recipe History *(last {MAX_RECIPES})*")
+    with st.container(height=460):
+        if st.session_state.recipes:
+            for i, recipe in enumerate(reversed(st.session_state.recipes)):
+                with st.expander(recipe["name"]):
+                    st.markdown(recipe["content"])
+                    if st.button("Remove", key=f"del_{i}"):
+                        st.session_state.recipes = [
+                            r for r in st.session_state.recipes
+                            if r["name"] != recipe["name"]
+                        ]
+                        save_history(st.session_state.ip, st.session_state.recipes)
+                        st.rerun()
+        else:
+            st.caption("Full recipes will be saved here automatically.")
 
 # ── Main chat ─────────────────────────────────────────────────────────────────
 
@@ -193,7 +184,15 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"], avatar=avatar):
         st.markdown(msg["content"])
 
-if prompt := st.chat_input("Tell me what ingredients you have..."):
+col_new, col_input = st.columns([1, 5])
+with col_new:
+    if st.button("🍽️ Start a new Recipe", use_container_width=True):
+        st.session_state.messages = []
+        st.rerun()
+with col_input:
+    prompt = st.chat_input("Tell me what ingredients you have...")
+
+if prompt:
     if not api_key:
         st.warning("Enter your Anthropic API key in the sidebar to start chatting.", icon="🔑")
         st.stop()
