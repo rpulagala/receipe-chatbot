@@ -179,11 +179,14 @@ with st.sidebar:
 st.title("🌿 Basil")
 st.caption("AI Recipe Assistant — tell me what ingredients you have!")
 
-for msg in st.session_state.messages:
-    avatar = "🌿" if msg["role"] == "assistant" else None
-    with st.chat_message(msg["role"], avatar=avatar):
-        st.markdown(msg["content"])
+# Scrollable message area — keeps the controls pinned at the bottom
+with st.container(height=500, border=False):
+    for msg in st.session_state.messages:
+        avatar = "🌿" if msg["role"] == "assistant" else None
+        with st.chat_message(msg["role"], avatar=avatar):
+            st.markdown(msg["content"])
 
+# ── Bottom controls (always visible) ─────────────────────────────────────────
 col_new, col_input = st.columns([1, 5])
 with col_new:
     if st.button("🍽️ Start a new Recipe", use_container_width=True):
