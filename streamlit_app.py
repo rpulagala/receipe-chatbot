@@ -95,7 +95,7 @@ section[data-testid="stSidebar"] { min-width: 280px; max-width: 320px; }
 
 # ── Session state init ────────────────────────────────────────────────────────
 
-if "identity" not in st.session_state:
+if "messages" not in st.session_state:
     computer, ip = get_session_identity()
     st.session_state.computer   = computer
     st.session_state.ip         = ip
