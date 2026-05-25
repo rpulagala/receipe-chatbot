@@ -1,0 +1,6 @@
+[theme]
+primaryColor        = "#9B2335"   # Red Chicory — buttons, links, active elements
+backgroundColor     = "#FAF6E8"   # Breezy Beige — main area
+secondaryBackgroundColor = "#D4C26B"  # Mustard Oil — sidebar, inputs
+textColor           = "#2C1208"   # Dark espresso — readable on both backgrounds
+font                = "sans serif"

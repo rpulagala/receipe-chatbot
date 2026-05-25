@@ -122,8 +122,63 @@ st.set_page_config(page_title="Basil — AI Recipe Assistant", page_icon="🌿",
 
 st.markdown("""
 <style>
+/* ── Palette ───────────────────────────────────────────────────────────────
+   Red Chicory  #9B2335
+   Mustard Oil  #D4C26B
+   Breezy Beige #FAF6E8
+   Espresso     #2C1208
+   ─────────────────────────────────────────────────────────────────────── */
+
+/* Sidebar */
+section[data-testid="stSidebar"] {
+    min-width: 280px;
+    max-width: 320px;
+    background-color: #D4C26B;
+}
+section[data-testid="stSidebar"] * { color: #2C1208 !important; }
+section[data-testid="stSidebar"] hr { border-color: #b8a74e; }
+
+/* User chat bubble — Red Chicory */
+[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) [data-testid="stChatMessageContent"],
+[data-testid="stChatMessage"][class*="user"] [data-testid="stChatMessageContent"] {
+    background-color: #9B2335;
+    color: #FAF6E8 !important;
+    border-radius: 18px;
+    padding: 10px 14px;
+}
+[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) [data-testid="stChatMessageContent"] p {
+    color: #FAF6E8 !important;
+}
+
+/* Assistant chat bubble — warm cream on Mustard Oil */
+[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-assistant"]) [data-testid="stChatMessageContent"] {
+    background-color: #EDE8C8;
+    border-radius: 18px;
+    padding: 10px 14px;
+}
+
+/* Paragraph spacing in all bubbles */
 [data-testid="stChatMessageContent"] p { margin: 0.3rem 0; }
-section[data-testid="stSidebar"] { min-width: 280px; max-width: 320px; }
+
+/* Primary button — Red Chicory */
+div.stButton > button[kind="secondary"],
+div.stButton > button {
+    background-color: #9B2335 !important;
+    color: #FAF6E8 !important;
+    border: none !important;
+    border-radius: 8px !important;
+}
+div.stButton > button:hover {
+    background-color: #7a1b28 !important;
+}
+
+/* Chat input border */
+[data-testid="stChatInput"] textarea:focus {
+    border-color: #9B2335 !important;
+}
+
+/* Title */
+h1 { color: #9B2335 !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -174,26 +229,52 @@ with st.sidebar:
         else:
             st.caption("Full recipes will be saved here automatically.")
 
-# ── Main chat ─────────────────────────────────────────────────────────────────
+# ── Main area ────────────────────────────────────────────────────────────────
 
-st.title("🌿 Basil")
-st.caption("AI Recipe Assistant — tell me what ingredients you have!")
+prompt = None
 
-# Scrollable message area — keeps the controls pinned at the bottom
-with st.container(height=500, border=False):
-    for msg in st.session_state.messages:
-        avatar = "🌿" if msg["role"] == "assistant" else None
-        with st.chat_message(msg["role"], avatar=avatar):
-            st.markdown(msg["content"])
+if not st.session_state.messages:
+    # ── Landing page: centred like Google ────────────────────────────────────
+    st.markdown("""
+    <style>
+    [data-testid="stMainBlockContainer"] { padding-top: 20vh !important; }
+    </style>
+    """, unsafe_allow_html=True)
 
-# ── Bottom controls (always visible) ─────────────────────────────────────────
-col_new, col_input = st.columns([1, 5])
-with col_new:
-    if st.button("🍽️ Start a new Recipe", use_container_width=True):
-        st.session_state.messages = []
-        st.rerun()
-with col_input:
-    prompt = st.chat_input("Tell me what ingredients you have...")
+    _, mid, _ = st.columns([1, 2, 1])
+    with mid:
+        st.markdown(
+            "<h1 style='text-align:center; margin-bottom:4px'>🌿 Basil</h1>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            "<p style='text-align:center; opacity:0.65; margin-top:0'>AI Recipe Assistant</p>",
+            unsafe_allow_html=True,
+        )
+        st.write("")
+        prompt = st.chat_input("Tell me what ingredients you have...")
+        if st.button("🍽️ Start a new Recipe", use_container_width=True):
+            st.session_state.messages = []
+            st.rerun()
+
+else:
+    # ── Chat view: title → messages → controls ───────────────────────────────
+    st.title("🌿 Basil")
+    st.caption("AI Recipe Assistant")
+
+    with st.container(height=500, border=False):
+        for msg in st.session_state.messages:
+            avatar = "🌿" if msg["role"] == "assistant" else None
+            with st.chat_message(msg["role"], avatar=avatar):
+                st.markdown(msg["content"])
+
+    col_new, col_input = st.columns([1, 5])
+    with col_new:
+        if st.button("🍽️ Start a new Recipe", use_container_width=True):
+            st.session_state.messages = []
+            st.rerun()
+    with col_input:
+        prompt = st.chat_input("Tell me what ingredients you have...")
 
 if prompt:
     if not api_key:
