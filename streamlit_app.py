@@ -185,4 +185,4 @@ if prompt := st.chat_input("Tell me what ingredients you have…"):
         if not any(r["name"] == name for r in st.session_state.recipes):
             st.session_state.recipes.append({"name": name, "content": reply})
             save_history(st.session_state.user_id, st.session_state.recipes)
-            st.toast(f"✅ "{name}" saved to your recipe history!", icon="📋")
+            st.toast(f"'{name}' saved to your recipe history!", icon="📋")
