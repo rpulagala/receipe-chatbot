@@ -25,11 +25,73 @@ How to respond:
 
 Always be encouraging. Cooking at home is a skill worth celebrating."""
 
-HISTORY_FILE = Path("recipe_history.json")
+MAX_RECIPES = 5
+HISTORY_FILE = Path("recipe_history.json")   # fallback for local dev
 
+
+# ── Database helpers ──────────────────────────────────────────────────────────
+
+def _get_db():
+    """Return a Supabase client if credentials are configured, else None."""
+    try:
+        from supabase import create_client
+        url = os.getenv("SUPABASE_URL") or st.secrets.get("SUPABASE_URL", "")
+        key = os.getenv("SUPABASE_KEY") or st.secrets.get("SUPABASE_KEY", "")
+        if url and key:
+            return create_client(url, key)
+    except Exception:
+        pass
+    return None
+
+
+def load_history(ip: str) -> list:
+    db = _get_db()
+    if db:
+        try:
+            result = (
+                db.table("recipe_history")
+                .select("recipes")
+                .eq("ip_address", ip)
+                .execute()
+            )
+            if result.data:
+                return result.data[0]["recipes"]
+            return []
+        except Exception:
+            pass
+    # Local fallback
+    try:
+        if HISTORY_FILE.exists():
+            return json.loads(HISTORY_FILE.read_text()).get(ip, [])
+    except Exception:
+        pass
+    return []
+
+
+def save_history(ip: str, history: list):
+    history = history[-MAX_RECIPES:]   # keep only the last 5
+    db = _get_db()
+    if db:
+        try:
+            db.table("recipe_history").upsert(
+                {"ip_address": ip, "recipes": history}
+            ).execute()
+            return
+        except Exception:
+            pass
+    # Local fallback
+    try:
+        data = json.loads(HISTORY_FILE.read_text()) if HISTORY_FILE.exists() else {}
+        data[ip] = history
+        HISTORY_FILE.write_text(json.dumps(data, indent=2))
+    except Exception:
+        pass
+
+
+# ── Session helpers ───────────────────────────────────────────────────────────
 
 def get_session_identity():
-    """Return (computer_name, ip) for the current user. No login required."""
+    """Return (computer_name, ip). No login required."""
     try:
         ip = (
             st.context.headers.get("X-Forwarded-For")
@@ -39,32 +101,11 @@ def get_session_identity():
         ip = ip.split(",")[0].strip()
     except Exception:
         ip = "local"
-
-    # Computer name: available when running locally; falls back to IP on cloud
     try:
         computer = socket.gethostname()
     except Exception:
         computer = ip
-
     return computer, ip
-
-
-def load_history(user_id: str) -> list:
-    if HISTORY_FILE.exists():
-        try:
-            return json.loads(HISTORY_FILE.read_text()).get(user_id, [])
-        except Exception:
-            pass
-    return []
-
-
-def save_history(user_id: str, history: list):
-    try:
-        data = json.loads(HISTORY_FILE.read_text()) if HISTORY_FILE.exists() else {}
-        data[user_id] = history
-        HISTORY_FILE.write_text(json.dumps(data, indent=2))
-    except Exception:
-        pass
 
 
 def is_full_recipe(text: str) -> bool:
@@ -72,7 +113,6 @@ def is_full_recipe(text: str) -> bool:
 
 
 def extract_recipe_name(text: str) -> str:
-    """Pull the recipe title out of a formatted response."""
     match = re.search(r'^#{1,3}\s+(.+?)(?:\n|$)', text, re.MULTILINE)
     if match:
         return match.group(1).strip()
@@ -82,7 +122,7 @@ def extract_recipe_name(text: str) -> str:
     return "Saved Recipe"
 
 
-# ── Page config ──────────────────────────────────────────────────────────────
+# ── Page config ───────────────────────────────────────────────────────────────
 
 st.set_page_config(page_title="Basil — AI Recipe Assistant", page_icon="🌿", layout="wide")
 
@@ -93,26 +133,23 @@ section[data-testid="stSidebar"] { min-width: 280px; max-width: 320px; }
 </style>
 """, unsafe_allow_html=True)
 
-# ── Session state init ────────────────────────────────────────────────────────
+# ── Session state (runs once per browser session) ─────────────────────────────
 
 if "messages" not in st.session_state:
     computer, ip = get_session_identity()
-    st.session_state.computer   = computer
-    st.session_state.ip         = ip
-    st.session_state.user_id    = ip          # key for persistent storage
-    st.session_state.messages   = []
-    st.session_state.recipes    = load_history(ip)
+    st.session_state.computer = computer
+    st.session_state.ip       = ip
+    st.session_state.messages = []
+    st.session_state.recipes  = load_history(ip)   # load from DB on first visit
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 
 with st.sidebar:
-    # Session info
     st.markdown("### 💻 Your Session")
     st.markdown(f"**Computer:** `{st.session_state.computer}`")
     st.markdown(f"**IP address:** `{st.session_state.ip}`")
     st.divider()
 
-    # API key
     st.markdown("### 🔑 API Key")
     api_key = os.getenv("ANTHROPIC_API_KEY", "")
     if not api_key:
@@ -126,23 +163,23 @@ with st.sidebar:
         st.success("Key loaded from environment.", icon="✅")
     st.divider()
 
-    # Recipe history
-    st.markdown("### 📋 Recipe History")
+    st.markdown(f"### 📋 Recipe History *(last {MAX_RECIPES})*")
     if st.session_state.recipes:
         for i, recipe in enumerate(reversed(st.session_state.recipes)):
             with st.expander(recipe["name"]):
                 st.markdown(recipe["content"])
-                if st.button("🗑️ Remove", key=f"del_{i}"):
+                if st.button("Remove", key=f"del_{i}"):
                     st.session_state.recipes = [
-                        r for r in st.session_state.recipes if r["name"] != recipe["name"]
+                        r for r in st.session_state.recipes
+                        if r["name"] != recipe["name"]
                     ]
-                    save_history(st.session_state.user_id, st.session_state.recipes)
+                    save_history(st.session_state.ip, st.session_state.recipes)
                     st.rerun()
     else:
-        st.caption("Recipes Basil provides will appear here automatically.")
+        st.caption("Full recipes will be saved here automatically.")
     st.divider()
 
-    if st.button("🗑️ Clear chat"):
+    if st.button("Clear chat"):
         st.session_state.messages = []
         st.rerun()
 
@@ -156,7 +193,7 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"], avatar=avatar):
         st.markdown(msg["content"])
 
-if prompt := st.chat_input("Tell me what ingredients you have…"):
+if prompt := st.chat_input("Tell me what ingredients you have..."):
     if not api_key:
         st.warning("Enter your Anthropic API key in the sidebar to start chatting.", icon="🔑")
         st.stop()
@@ -179,10 +216,10 @@ if prompt := st.chat_input("Tell me what ingredients you have…"):
 
     st.session_state.messages.append({"role": "assistant", "content": reply})
 
-    # Auto-save full recipes to history
+    # Auto-save full recipes to DB (capped at MAX_RECIPES)
     if is_full_recipe(reply):
         name = extract_recipe_name(reply)
         if not any(r["name"] == name for r in st.session_state.recipes):
             st.session_state.recipes.append({"name": name, "content": reply})
-            save_history(st.session_state.user_id, st.session_state.recipes)
-            st.toast(f"'{name}' saved to your recipe history!", icon="📋")
+            save_history(st.session_state.ip, st.session_state.recipes)
+            st.toast(f"'{name}' saved to recipe history!", icon="📋")
