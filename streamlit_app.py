@@ -28,6 +28,24 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# Sidebar — API key input (used when no env key is present)
+with st.sidebar:
+    st.markdown("### 🔑 API Key")
+    api_key = os.getenv("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        api_key = st.text_input(
+            "Anthropic API key",
+            type="password",
+            placeholder="sk-ant-...",
+            help="Your key is only held in memory for this session and never stored.",
+        )
+    else:
+        st.success("API key loaded from environment.", icon="✅")
+    st.divider()
+    if st.button("🗑️ Clear chat"):
+        st.session_state.messages = []
+        st.rerun()
+
 st.title("🌿 Basil")
 st.caption("AI Recipe Assistant — tell me what ingredients you have!")
 
@@ -40,22 +58,16 @@ for msg in st.session_state.messages:
         st.markdown(msg["content"])
 
 if prompt := st.chat_input("Tell me what ingredients you have…"):
+    if not api_key:
+        st.warning("Enter your Anthropic API key in the sidebar to start chatting.", icon="🔑")
+        st.stop()
+
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant", avatar="🌿"):
-        api_key = os.getenv("ANTHROPIC_API_KEY")
-        if not api_key:
-            try:
-                api_key = st.secrets["ANTHROPIC_API_KEY"]
-            except (KeyError, FileNotFoundError):
-                pass
-        if not api_key:
-            st.error("ANTHROPIC_API_KEY is not configured. Add it in Streamlit Cloud → App settings → Secrets.")
-            st.stop()
         client = anthropic.Anthropic(api_key=api_key)
-
         with st.spinner(""):
             response = client.messages.create(
                 model="claude-sonnet-4-6",
@@ -64,7 +76,6 @@ if prompt := st.chat_input("Tell me what ingredients you have…"):
                 messages=st.session_state.messages,
             )
             reply = response.content[0].text
-
         st.markdown(reply)
 
     st.session_state.messages.append({"role": "assistant", "content": reply})
